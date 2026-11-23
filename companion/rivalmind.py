@@ -362,8 +362,12 @@ def gui() -> None:
             )
             lines.append(
                 f"Observed: {telemetry['distinct_zones']} zones, "
-                f"{telemetry['equipment_observations']} equipment changes/snapshots, "
+                f"{telemetry['equipment_baseline_snapshots']} initial gear snapshots, "
                 f"{telemetry['bag_quantity_changes']} bag-item changes"
+            )
+            lines.append(
+                f"Gear changes: {telemetry['equipment_confirmed_changes']} verified, "
+                f"{telemetry['equipment_legacy_unclassified']} older unclassified observations"
             )
             lines.append("")
         for started, duration, xp, deaths, zone in rows:
