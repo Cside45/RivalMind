@@ -13,8 +13,6 @@ FIELD = re.compile(r'(?:\[\s*["\']telemetryExport["\']\s*\]|\btelemetryExport)\s
 UNSIGNED = re.compile(r'\d{1,12}\Z')
 SIGNED = re.compile(r'-?\d{1,12}\Z')
 ENCODED = re.compile(r'(?:[A-Za-z0-9_.-]|%[0-9A-Fa-f]{2})*\Z')
-CLASSES = {'WARRIOR', 'PALADIN', 'HUNTER', 'ROGUE', 'PRIEST', 'SHAMAN', 'MAGE',
-           'WARLOCK', 'DRUID', 'DEATHKNIGHT', 'MONK', 'DEMONHUNTER', 'EVOKER'}
 
 
 def _int(raw: str, signed: bool = False) -> int:
@@ -58,7 +56,7 @@ def parse_telemetry_export(source: str) -> list[dict]:
             raise ValueError('Unexpected telemetry field')
         if kind == 'C':
             a = _decode(a, 72)
-            if a not in CLASSES or not 1 <= _int(b) <= 1000:
+            if not re.fullmatch(r'[A-Z_]{2,24}', a) or not 1 <= _int(b) <= 1000:
                 raise ValueError('Invalid character snapshot')
             b = str(_int(b))
         elif kind == 'Z':
