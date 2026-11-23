@@ -85,6 +85,7 @@ local function record(kind, id, reward, title)
     records[#records + 1] = {
         id = entryID, questID = id, stamp = timestamp,
         kind = kind, xpReward = xp, title = name, zone = zone,
+        characterID = RM.GetCharacterID and RM.GetCharacterID() or 0,
     }
     while #records > MAX_EVENTS do table.remove(records, 1) end
 end
@@ -133,7 +134,7 @@ end
 local function exportQuests()
     local records = eventStore()
     if not records then return end
-    local lines = { "RQ1" }
+    local lines = { "RQ2" }
     for _, entry in ipairs(records) do
         lines[#lines + 1] = table.concat({
             tostring(safeInteger(entry.id) or 0),
@@ -144,6 +145,7 @@ local function exportQuests()
             entry.xpReward and tostring(safeInteger(entry.xpReward) or 0) or "",
             encode(entry.zone),
             encode(entry.title),
+            tostring(safeInteger(entry.characterID) or 0),
         }, ",")
     end
     RivalMindDB.questExport = table.concat(lines, ";")
