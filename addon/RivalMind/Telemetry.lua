@@ -83,8 +83,10 @@ local function equipmentSnapshot(slot)
     for i = first, last do
         local ok, value = pcall(GetInventoryItemID, "player", i)
         if ok then
-            local id = integer(value) or 0
-            if equipment[i] ~= id then
+            -- nil means empty slot; a restricted/unreadable value means unknown.
+            local id = integer(value)
+            if value == nil then id = 0 end
+            if id and equipment[i] ~= id then
                 equipment[i] = id
                 record("E", i, id, "")
             end
