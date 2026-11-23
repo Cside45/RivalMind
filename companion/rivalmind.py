@@ -19,7 +19,9 @@ from urllib.parse import unquote
 VERSION = "0.1.0-alpha"
 MAX_INPUT_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 100
+MAX_QUEST_ROWS = 200
 EXPORT_FIELD = re.compile(r'(?:\[\s*["\']export["\']\s*\]|\bexport)\s*=\s*"([^"\r\n]*)"')
+QUEST_EXPORT_FIELD = re.compile(r'(?:\[\s*["\']questExport["\']\s*\]|\bquestExport)\s*=\s*"([^"\r\n]*)"')
 INT_FIELD = re.compile(r"\d{1,12}\Z")
 ZONE_FIELD = re.compile(r"(?:[A-Za-z0-9_.-]|%[0-9A-Fa-f]{2}){0,300}\Z")
 
@@ -75,6 +77,85 @@ def parse_export(file_contents: str) -> list[dict]:
     return result
 
 
+def parse_quest_export(file_contents: str) -> list[dict]:
+    """Return empty for v0.1 exports; parse strict v0.2 quest rows when present."""
+    matches = QUEST_EXPORT_FIELD.findall(file_contents)
+    if not matches:
+        return []
+    if len(matches) != 1:
+        raise ImportErrorRM("Ambiguous quest export")
+    parts = matches[0].split(";")
+    if parts[0] != "RQ1" or len(parts) - 1 > MAX_QUEST_ROWS:
+        raise ImportErrorRM("Unsupported quest export or too many quest events")
+    result = []
+    seen = set()
+    for row in parts[1:]:
+        fields = row.split(",")
+        if len(fields) != 7:
+            raise ImportErrorRM("Malformed quest event")
+        if not all(INT_FIELD.fullmatch(x) for x in fields[:3]):
+            raise ImportErrorRM("Invalid quest event identifier or timestamp")
+        ident, qid, stamp = map(int, fields[:3])
+        if ident < 1 or not 0 < qid < 100000000 or not 0 < stamp < 5000000000:
+            raise ImportErrorRM("Invalid quest event values")
+        if ident in seen or fields[3] not in ("A", "C", "T", "R"):
+            raise ImportErrorRM("Duplicate quest event ID or unknown event kind")
+        seen.add(ident)
+        reward = fields[4]
+        if reward and not INT_FIELD.fullmatch(reward):
+            raise ImportErrorRM("Invalid quest reward")
+        if reward and int(reward) > 100000000:
+            raise ImportErrorRM("Unreasonable quest reward")
+        if not ZONE_FIELD.fullmatch(fields[5]) or len(fields[6]) > 600:
+            raise ImportErrorRM("Invalid quest text")
+        if not re.fullmatch(r"(?:[A-Za-z0-9_.-]|%[0-9A-Fa-f]{2}){0,600}", fields[6]):
+            raise ImportErrorRM("Invalid quest title encoding")
+        result.append({
+            "event_id": ident,
+            "quest_id": qid,
+            "stamp": stamp,
+            "kind": fields[3],
+            "reported_xp": int(reward) if reward else None,
+            "zone": unquote(fields[5], encoding="utf-8", errors="replace"),
+            "title": unquote(fields[6], encoding="utf-8", errors="replace"),
+        })
+    return result
+
+
+def read_quest_events(file_path: Path) -> list[dict]:
+    file_path = Path(file_path).expanduser().resolve(strict=True)
+    if not file_path.is_file() or file_path.name.casefold() != "rivalmind.lua":
+        raise ImportErrorRM("Select the WoW RivalMind.lua SavedVariables file")
+    if file_path.stat().st_size > MAX_INPUT_BYTES:
+        raise ImportErrorRM("File exceeds safe import limit")
+    return parse_quest_export(file_path.read_text(encoding="utf-8-sig"))
+
+
+def read_recent_quests(database_path: Path | None = None) -> list[tuple]:
+    db_path = Path(database_path or default_database())
+    if not db_path.exists():
+        return []
+    with sqlite3.connect(db_path) as connection:
+        try:
+            return connection.execute("""
+                SELECT stamp, kind, quest_id, title, reported_xp, zone
+                FROM quest_events ORDER BY stamp DESC, event_id DESC LIMIT 6
+            """).fetchall()
+        except sqlite3.OperationalError:
+            return []
+
+
+def count_quests(database_path: Path | None = None) -> int:
+    db_path = Path(database_path or default_database())
+    if not db_path.exists():
+        return 0
+    with sqlite3.connect(db_path) as connection:
+        try:
+            return connection.execute("SELECT COUNT(*) FROM quest_events").fetchone()[0]
+        except sqlite3.OperationalError:
+            return 0
+
+
 def read_sessions(file_path: Path) -> list[dict]:
     file_path = Path(file_path).expanduser().resolve(strict=True)
     if not file_path.is_file() or file_path.name.casefold() != "rivalmind.lua":
@@ -88,6 +169,7 @@ def read_sessions(file_path: Path) -> list[dict]:
 def import_sessions(file_path: Path, database_path: Path | None = None) -> tuple[int, int]:
     file_path = Path(file_path).expanduser().resolve(strict=True)
     sessions = read_sessions(file_path)
+    quest_events = read_quest_events(file_path)
     db_path = Path(database_path or default_database()).expanduser()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     # Hash the on-disk source path rather than storing an account/character path.
@@ -123,6 +205,33 @@ def import_sessions(file_path: Path, database_path: Path | None = None) -> tuple
                 session["xp_earned"], session["deaths"], session["start_level"],
                 session["end_level"], session["last_zone"], timestamp
             ))
+        connection.execute("""CREATE TABLE IF NOT EXISTS quest_events (
+            source_key TEXT NOT NULL,
+            event_id INTEGER NOT NULL,
+            quest_id INTEGER NOT NULL,
+            stamp INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            reported_xp INTEGER,
+            zone TEXT NOT NULL,
+            title TEXT NOT NULL,
+            imported_at INTEGER NOT NULL,
+            PRIMARY KEY (source_key, event_id)
+        )""")
+        for quest in quest_events:
+            connection.execute("""INSERT INTO quest_events (
+                source_key, event_id, quest_id, stamp, kind, reported_xp, zone, title, imported_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source_key, event_id) DO UPDATE SET
+                quest_id = excluded.quest_id,
+                stamp = excluded.stamp,
+                kind = excluded.kind,
+                reported_xp = excluded.reported_xp,
+                zone = excluded.zone,
+                title = excluded.title,
+                imported_at = excluded.imported_at""", (
+                source_key, quest["event_id"], quest["quest_id"], quest["stamp"],
+                quest["kind"], quest["reported_xp"], quest["zone"], quest["title"], timestamp
+            ))
         total = connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
     return len(sessions), total
 
@@ -144,7 +253,7 @@ def gui() -> None:
     from datetime import datetime
 
     app = tk.Tk()
-    app.title("RivalMind | Local Companion")
+    app.title("RivalMind | Local Companion v0.2")
     app.geometry("590x400")
     app.minsize(530, 340)
     app.configure(padx=18, pady=16)
@@ -179,6 +288,15 @@ def gui() -> None:
         for started, duration, xp, deaths, zone in rows:
             when = datetime.fromtimestamp(started).strftime("%b %d %H:%M")
             lines.append(f"{when:<15}  {duration // 60:>3} min   {xp:>7} XP   {deaths} deaths   {zone[:28]}")
+        quests = read_recent_quests()
+        if quests:
+            lines.append("")
+            lines.append("Recent quest events (R means removed, not necessarily abandoned)")
+            kinds = {"A": "Accepted", "C": "Objectives complete", "T": "Turned in", "R": "Removed"}
+            for stamp, kind, quest_id, title, xp, zone in quests:
+                when = datetime.fromtimestamp(stamp).strftime("%b %d %H:%M")
+                name = (title or f"Quest #{quest_id}")[:38]
+                lines.append(f"{when}  {kinds.get(kind, kind):<20}  {name}")
         history.configure(state="normal")
         history.delete("1.0", tk.END)
         history.insert(tk.END, "\n".join(lines) if lines else "No sessions imported yet.")
@@ -190,7 +308,7 @@ def gui() -> None:
         except (OSError, ValueError, sqlite3.DatabaseError) as exc:
             messagebox.showerror("Import failed", str(exc))
             return
-        status.set(f"Imported/updated {imported} local sessions. {total} sessions in your database.")
+        status.set(f"Imported/updated {imported} sessions ({total} total). {count_quests()} quest events stored locally.")
         refresh()
 
     ttk.Button(app, text="Import saved sessions", command=import_file).pack(anchor="e", pady=(10, 2))
@@ -206,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.import_file:
         try:
             imported, total = import_sessions(args.import_file, args.database)
-            print(f"Imported/updated {imported} sessions; {total} in SQLite")
+            print(f"Imported/updated {imported} sessions; {total} sessions and {count_quests(args.database)} quest events in SQLite")
             return 0
         except (OSError, ValueError, sqlite3.DatabaseError) as exc:
             print(f"Import failed: {exc}", file=sys.stderr)
