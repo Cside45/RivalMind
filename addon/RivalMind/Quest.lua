@@ -100,11 +100,13 @@ local function scanQuestLog()
     for i = 1, count do
         local success, info = pcall(C_QuestLog.GetInfo, i)
         if success and type(info) == "table" then
-            local id = questID(info.questID)
-            if id and info.isHeader ~= true then
-                local title = safeString(info.title, 120)
+            -- Access every quest-log field inside pcall: some Forever values can be secret.
+            local fieldsOK, id, title, complete, header = pcall(function()
+                return questID(info.questID), safeString(info.title, 120),
+                    info.isComplete == true or info.isComplete == 1, info.isHeader == true
+            end)
+            if fieldsOK and id and not header then
                 if title ~= "" then knownTitles[id] = title end
-                local complete = info.isComplete == true or info.isComplete == 1
                 if knownComplete[id] == false and complete then
                     record("C", id, nil, title)
                 end
