@@ -53,6 +53,24 @@ local function initialize()
     end
 end
 
+-- A per-character local ID allocated by the account SavedVariables file.
+-- WoW stores RivalMindCharDB separately per character. No name, realm or GUID
+-- is exported or needed for partitioning the local analytics.
+function RM.GetCharacterID()
+    if type(RivalMindDB) ~= "table" then return 0 end
+    if type(RivalMindCharDB) ~= "table" then RivalMindCharDB = {} end
+    local id = numberOrZero(RivalMindCharDB.id)
+    if id == 0 or id > 100000000 then
+        RivalMindDB.nextCharacterID = numberOrZero(RivalMindDB.nextCharacterID) + 1
+        id = RivalMindDB.nextCharacterID
+        RivalMindCharDB.id = id
+    end
+    if numberOrZero(RivalMindDB.nextCharacterID) < id then
+        RivalMindDB.nextCharacterID = id
+    end
+    return id
+end
+
 function RM.GetSettings()
     return RivalMindDB and RivalMindDB.settings
 end
@@ -86,7 +104,7 @@ end
 local function exportSessions()
     -- A strict, simple, ASCII-only interchange format. The companion parses this
     -- string as DATA, never executes Lua or evaluates a SavedVariables file.
-    local rows = { "RM1" }
+    local rows = { "RM2" }
     for _, session in ipairs(RivalMindDB.sessions) do
         rows[#rows + 1] = table.concat({
             numberOrZero(session.id),
@@ -97,6 +115,7 @@ local function exportSessions()
             numberOrZero(session.startLevel),
             numberOrZero(session.endLevel),
             percentEncode(session.zone),
+            numberOrZero(session.characterID),
         }, ",")
     end
     RivalMindDB.export = table.concat(rows, ";")
@@ -110,6 +129,7 @@ local function startSession()
     RivalMindDB.nextID = RivalMindDB.nextID + 1
     current = {
         id = RivalMindDB.nextID,
+        characterID = RM.GetCharacterID(),
         started = now,
         last = now,
         xpEarned = 0,
