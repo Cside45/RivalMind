@@ -189,12 +189,14 @@ SlashCmdList.RIVALMIND = function(input)
         RM.PrintStatus()
     elseif input == "quests" then
         if RM.PrintQuestStatus then RM.PrintQuestStatus() end
+    elseif input == "telemetry" then
+        if RM.PrintTelemetryStatus then RM.PrintTelemetryStatus() end
     elseif input == "show" then
         if RM.SetPanelVisible then RM.SetPanelVisible(true) end
     elseif input == "hide" then
         if RM.SetPanelVisible then RM.SetPanelVisible(false) end
     elseif input == "help" then
-        print("|cff80c5ffRivalMind|r: /rm [show | hide | status | quests | help]")
+        print("|cff80c5ffRivalMind|r: /rm [show | hide | status | quests | telemetry | help]")
     else
         if RM.TogglePanel then RM.TogglePanel() end
     end
