@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import sys
 from pathlib import Path
 
 # Allow the companion to load its reviewed, bundled local parser when imported
@@ -17,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from telemetry import parse_telemetry_export, store_telemetry, summarize_telemetry
 import re
 import sqlite3
-import sys
 import time
 from urllib.parse import unquote
 
