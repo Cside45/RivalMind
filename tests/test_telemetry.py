@@ -46,6 +46,65 @@ class TelemetryTests(unittest.TestCase):
             self.assertEqual(summary['equipment_legacy_unclassified'], 1)
             self.assertEqual(summary['equipment_confirmed_changes'], 1)
 
+    def test_rt2_profiles_do_not_mix(self):
+        one = 'abcdef012345abcdef012345'
+        two = 'fedcba987654fedcba987654'
+        source = (
+            'telemetryExport = "RT2;'
+            f'1,1763800010,C,SHAMAN,27,,{one};'
+            f'2,1763800011,G,10000,,,{one};'
+            f'3,1763800020,V,1,,,{one};'
+            f'4,1763800030,G,15000,5000,,{one};'
+            f'5,1763800040,V,0,,,{one};'
+            f'6,1763800050,C,HUNTER,33,,{two};'
+            f'7,1763800060,G,990000,,,{two}"'
+        )
+        events = telemetry.parse_telemetry_export(source)
+        self.assertEqual(len(events), 7)
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / 'rivalmind.sqlite3'
+            with sqlite3.connect(db) as conn:
+                telemetry.store_telemetry(conn, 'same_account_file', 10, events)
+                telemetry.store_telemetry(conn, 'same_account_file', 20, events)
+            summary = telemetry.summarize_telemetry(db)
+            self.assertEqual(summary['events'], 7)
+            self.assertEqual(summary['character_profiles'], 2)
+            self.assertEqual(summary['character'], ('HUNTER', 33))
+            self.assertEqual(summary['active_character_events'], 2)
+            self.assertEqual(summary['last_observed_gold_copper'], 990000)
+            self.assertEqual(summary['gold_net_copper'], 0)
+            self.assertEqual(summary['vendor_windows_observed'], 0)
+
+    def test_vendor_context_does_not_attrib_money_to_sale(self):
+        token = 'abcdef012345abcdef012345'
+        source = (
+            'telemetryExport = "RT2;'
+            f'1,1763800010,C,SHAMAN,27,,{token};'
+            f'2,1763800020,V,1,,,{token};'
+            f'3,1763800030,G,12000,2000,,{token};'
+            f'4,1763800040,V,0,,,{token}"'
+        )
+        events = telemetry.parse_telemetry_export(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / 'db.sqlite3'
+            with sqlite3.connect(db) as conn:
+                telemetry.store_telemetry(conn, 'local', 10, events)
+            summary = telemetry.summarize_telemetry(db)
+            self.assertEqual(summary['vendor_windows_observed'], 1)
+            self.assertEqual(summary['gold_net_copper'], 2000)
+            self.assertNotIn('vendor_profit_copper', summary)
+
+    def test_rt2_rejects_invalid_token_or_vendor(self):
+        for raw in (
+            'RT2;1,1763800000,G,1000,,,not-a-token',
+            'RT2;1,1763800000,V,3,,,abcdef012345abcdef012345',
+            'RT1;1,1763800000,V,1,,',
+            'RT2;1,1763800000,G,1000,,',
+        ):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError):
+                    telemetry.parse_telemetry_export('telemetryExport = "' + raw + '"')
+
     def test_backward_compatible(self):
         self.assertEqual(telemetry.parse_telemetry_export('RivalMindDB = { ["export"] = "RM1" }'), [])
 
