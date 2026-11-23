@@ -1,5 +1,27 @@
 # RivalMind: v0.4 local telemetry alpha
 
+### v0.4.1 experimental character and vendor context
+
+- Fresh **RT2** telemetry events carry a 24-character opaque token from
+  `RivalMindCharacterDB` (per-character SavedVariables). The companion
+  keeps character telemetry summaries separate even when imported from the
+  same account-level `RivalMind.lua`. No names or GUIDs are exported.
+- Records saved by older versions without a token stay **unassigned**.
+  They are never retroactively linked to a specific character.
+- A new **S** event marks a first-observed equipped item; **D** marks a
+  subsequent change. Old **E** records remain unclassified.
+- **V** events record merchant window opening/closing only. Changes in copper
+  near a vendor are still net money movement, **not verified sales/profit**.
+- The source still stores account-level session and quest histories; they
+  are **not yet character-separated**. Only new RT2 telemetry summaries
+  are separated by character. The app shows the latest observed character,
+  not a selectable multi-character dashboard.
+- An anonymous token isn't a cryptographic identity or privacy guarantee.
+  It identifies locally recorded events; do not share raw SavedVariables
+  publicly. Back up your existing data before updating the addon.
+- The addon and Windows companion must both be updated to v0.4.1 to use
+  the new format; the importer remains backward-compatible with RT1.
+
 ## v0.4 telemetry foundation (experimental branch)
 
 The v0.4 addon keeps the **existing minimal /rm panel**. It adds no overlays,
