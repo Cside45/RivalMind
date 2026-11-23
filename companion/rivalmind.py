@@ -247,13 +247,65 @@ def read_recent(database_path: Path | None = None) -> list[tuple]:
         """).fetchall()
 
 
+
+def analyze_quest_turnins(rows: list[tuple]) -> list[dict]:
+    """Pair observed quest acceptances with turn-ins, within each local source.
+
+    Input tuples: (source_key, event_id, quest_id, stamp, kind, reported_xp, title, zone).
+    Elapsed time is wall-clock time between the two observed events, NOT active
+    questing time. A quest without a recorded acceptance has unknown duration.
+    QUEST_REMOVED must not clear an acceptance: turn-ins often also remove quests.
+    """
+    open_quests: dict[tuple[str, int], int] = {}
+    completed = []
+    for source, event_id, quest_id, stamp, kind, xp, title, zone in sorted(
+        rows, key=lambda x: (x[0], x[3], x[1])
+    ):
+        key = (source, quest_id)
+        if kind == "A":
+            open_quests[key] = stamp
+        elif kind == "T":
+            started = open_quests.pop(key, None)
+            elapsed = stamp - started if started is not None and stamp >= started else None
+            # Zero-duration event pairs are valid but cannot yield an hourly rate.
+            rate = (
+                xp * 3600 // elapsed
+                if elapsed is not None and elapsed > 0 and xp is not None
+                else None
+            )
+            completed.append({
+                "source_key": source, "quest_id": quest_id, "turnin_at": stamp,
+                "title": title, "zone": zone, "reported_xp": xp,
+                "accepted_at": started, "elapsed_seconds": elapsed,
+                "elapsed_xp_per_hour": rate,
+            })
+        # A removal is not proof of abandonment; never infer one.
+    return sorted(completed, key=lambda q: q["turnin_at"], reverse=True)
+
+
+def read_quest_efficiency(database_path: Path | None = None) -> list[dict]:
+    """Read a bounded sample of locally stored quest events; no network access."""
+    db_path = Path(database_path or default_database())
+    if not db_path.exists():
+        return []
+    with sqlite3.connect(db_path) as connection:
+        try:
+            rows = connection.execute("""
+                SELECT source_key, event_id, quest_id, stamp, kind,
+                       reported_xp, title, zone
+                FROM quest_events ORDER BY rowid DESC LIMIT 10000
+            """).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    return analyze_quest_turnins(rows)
+
 def gui() -> None:
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
     from datetime import datetime
 
     app = tk.Tk()
-    app.title("RivalMind | Local Companion v0.2")
+    app.title("RivalMind | Local Companion v0.3")
     app.geometry("590x400")
     app.minsize(530, 340)
     app.configure(padx=18, pady=16)
@@ -288,15 +340,21 @@ def gui() -> None:
         for started, duration, xp, deaths, zone in rows:
             when = datetime.fromtimestamp(started).strftime("%b %d %H:%M")
             lines.append(f"{when:<15}  {duration // 60:>3} min   {xp:>7} XP   {deaths} deaths   {zone[:28]}")
-        quests = read_recent_quests()
+        quests = read_quest_efficiency()
         if quests:
             lines.append("")
-            lines.append("Recent quest events (R means removed, not necessarily abandoned)")
-            kinds = {"A": "Accepted", "C": "Objectives complete", "T": "Turned in", "R": "Removed"}
-            for stamp, kind, quest_id, title, xp, zone in quests:
-                when = datetime.fromtimestamp(stamp).strftime("%b %d %H:%M")
-                name = (title or f"Quest #{quest_id}")[:38]
-                lines.append(f"{when}  {kinds.get(kind, kind):<20}  {name}")
+            lines.append("Quest turn-ins  |  elapsed since observed acceptance (includes downtime)")
+            for quest in quests[:6]:
+                when = datetime.fromtimestamp(quest["turnin_at"]).strftime("%b %d %H:%M")
+                name = (quest["title"] or f'Quest #{quest["quest_id"]}')[:27]
+                elapsed = quest["elapsed_seconds"]
+                elapsed_text = (
+                    f"{elapsed // 3600}h {(elapsed % 3600) // 60}m"
+                    if elapsed is not None else "unknown"
+                )
+                reward = quest["reported_xp"]
+                xp_text = f"{reward} XP" if reward is not None else "XP unknown"
+                lines.append(f"{when}  {name:<27}  {elapsed_text:<9}  {xp_text}")
         history.configure(state="normal")
         history.delete("1.0", tk.END)
         history.insert(tk.END, "\n".join(lines) if lines else "No sessions imported yet.")
