@@ -63,7 +63,7 @@ def parse_telemetry_export(source: str) -> list[dict]:
             a, b = _decode(a), _decode(b)
             if not a or len(a) > 80 or len(b) > 80:
                 raise ValueError('Invalid location snapshot')
-        elif kind in ('E', 'S'):
+        elif kind in ('E', 'S', 'D'):
             if not 1 <= _int(a) <= 19 or _int(b) > 100_000_000:
                 raise ValueError('Invalid equipment snapshot')
             a, b = str(_int(a)), str(_int(b))
@@ -133,6 +133,8 @@ def summarize_telemetry(database_path: Path) -> dict:
             gear_legacy += 1
         elif kind == 'S':
             gear_baselines += 1
+        elif kind == 'D':
+            gear_changes += 1
     return {'events': len(rows), 'character': latest_char,
             'gold_net_copper': gold_net, 'last_observed_gold_copper': latest_balance,
             'zone_observations': zone_changes, 'distinct_zones': len(zones),
