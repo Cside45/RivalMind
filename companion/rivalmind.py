@@ -16,7 +16,7 @@ import sys
 import time
 from urllib.parse import unquote
 
-VERSION = "0.1.0-alpha"
+VERSION = "0.3.0-alpha"
 MAX_INPUT_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 100
 MAX_QUEST_ROWS = 200
