@@ -5,7 +5,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT.parent
-VERSION = "0.1.0-alpha"
+VERSION = "0.2.0-alpha"
 
 
 def write_zip(destination, files):
