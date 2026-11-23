@@ -37,8 +37,11 @@ equipment observations, and bag-item changes. Prior exports remain compatible.
   event never happened.
 - Gold totals are observed **net copper changes** only. No vendor attribution
   or loot value calculation is implemented.
-- Gear records include an initial snapshot, not necessarily an actual
-  equipment change.
+- Gear observations are **separated by type** in the latest v0.4 development
+  build: S (initial slot snapshot) and D (observed slot change). Older v0.4
+  E records remain explicitly **unclassified** because their origins are
+  ambiguous. Reloading can still produce 19 new snapshot records, but they
+  are not mislabeled as gear swaps.
 - Bag counts reflect net changes across player bags, not exact loot pickup
   attribution. A baseline scan does not generate fake loot.
 - This is a **development branch**, not a public signed Windows release.
