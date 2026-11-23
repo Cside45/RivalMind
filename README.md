@@ -1,4 +1,4 @@
-# RivalMind 0.1.0-alpha — local-first foundation
+# RivalMind 0.2.0-alpha — quest telemetry preview
 
 **Status:** early prototype. Not yet field-tested on a live WoW: Forever client.
 
@@ -11,12 +11,17 @@ SavedVariables export, and local SQLite import before enabling advanced features
 - WoW: Forever addon (`Interface: 16001`): session time, XP gain/rate, level, deaths, latest zone.
 - Tiny draggable session panel, **hidden by default**. `/rm` to toggle; `/rm status` for text.
 - Last **100** session summaries retained in WoW's SavedVariables (bounded storage).
+- **Quest Intelligence preview:** accepted, turned-in, quest-log completion and removed (reason unknown) events, including available quest title, ID, zone and reported reward XP. Last **200** quest events are kept locally.
+- `/rm quests` shows a brief on-demand quest event summary; the existing session panel remains unchanged and hidden by default.
+- Companion imports quest events into a separate SQLite table; v0.1 session exports are still supported.
 - Local companion: manually import the addon export into SQLite and view recent sessions.
 - Companion has **no outbound network capabilities**, no AI authentication, no guild traffic.
 - SQLite data stays in the local user profile. Reimports update records instead of duplicating.
 
 Not yet implemented: combat encounter attribution, kill tracking, guild sync, live
 PvP tactical advice, API connections, ChatGPT/Claude login, automatic import, auto-updates.
+Quest event handling in **v0.2 is not yet tested inside WoW: Forever**. Removal events
+must not be interpreted as abandonment; a turn-in may also trigger a removal.
 
 ## Install and test the addon
 
@@ -24,8 +29,8 @@ PvP tactical advice, API connections, ChatGPT/Claude login, automatic import, au
    `World of Warcraft/_forever_/Interface/AddOns/`. Do not install into `_retail_`.
 2. Launch WoW: Forever and enable RivalMind on the AddOns screen.
 3. Run `/rm` to show the small panel. Run `/rm hide` or close it to hide it.
-4. Play normally. This first alpha collects only player XP, deaths, zone and session time.
-5. Type `/reload` or log out to make WoW write `RivalMindDB.export` to disk.
+4. Play normally. This alpha collects player XP, deaths, zone, session time and basic quest events.
+5. Type `/rm quests` after accepting and turning in a quest. Use `/reload` or log out to make WoW write `RivalMindDB.export` and `RivalMindDB.questExport` to disk.
 
 Note: in-game memory does not automatically stream to the companion. WoW writes
 SavedVariables on UI reload/logout. This first test deliberately avoids hacks or polling.
@@ -50,7 +55,7 @@ The companion **never executes** the Lua file. It reads only a strict ASCII-enco
 
 ## Distribution plan
 
-- **CurseForge:** publish the pure-Lua addon ZIP, `RivalMind-addon-0.1.0-alpha.zip`,
+- **CurseForge:** publish the pure-Lua addon ZIP, `RivalMind-addon-0.2.0-alpha.zip`,
   tagged as WoW Forever 1.60.1 (interface 16001).
 - **GitHub Releases:** publish a future standalone signed Windows companion binary.
   End users download a release asset, **not a Git clone**.
@@ -67,6 +72,7 @@ The companion **never executes** the Lua file. It reads only a strict ASCII-enco
 - No developer-hosted service, no outbound connection, no telemetry, no API keys.
 - No guild sharing in this build. Future guild exchange is **explicit opt-in**.
 - This alpha records no character name, account name, GUID, or chat logs in its export.
+- Quest titles, IDs, zone names and event timestamps are stored locally.
 - Companion stores a one-way hash of the SavedVariables source path for deduplication.
 - SQLite is local, under the user's profile; the companion never elevates privileges.
 - **Do not commit or share your WTF or SavedVariables directory.**
@@ -81,11 +87,11 @@ python -m unittest discover -s tests -v
 
 ## Known limitations
 
-- This prototype is **not verified in-game** on Forever. Supported API behavior must
-  be validated on an actual Forever client before CurseForge publication.
+- The v0.1 session collector was smoke-tested in-game for addon loading, XP gain and
+  zone changes. The new v0.2 quest event handlers are **not yet verified in-game**.
 - It does **not** register the restricted `COMBAT_LOG_EVENT_UNFILTERED` event.
 - XP calculations across unusual leveling transitions may be approximate.
-- It retains only 100 WoW session records, so import periodically. Imported data remains
+- It retains only 100 WoW session records and 200 quest events, so import periodically. Imported data remains
   in SQLite even after the addon ages older records out.
 - Existing RivalTally/LootSnipe data is **not imported or modified** in this alpha.
 - The source is published publicly as an experimental alpha. No signed companion installer or public release has been published.
