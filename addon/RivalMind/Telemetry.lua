@@ -9,6 +9,29 @@ local lastGold
 local lastZoneKey
 local bagCounts
 local bagPending = false
+local characterToken
+local merchantOpen = false
+
+-- A random locally held per-character token; no name or GUID is exported.
+-- The token itself lives in per-character SavedVariables across reloads.
+local function getCharacterToken()
+    if characterToken then return characterToken end
+    if type(RivalMindCharacterDB) ~= "table" then RivalMindCharacterDB = {} end
+    local token = RivalMindCharacterDB.localToken
+    if type(token) ~= "string" or not token:match("^[0-9a-f]+$")
+        or #token ~= 24 then
+        -- Mix time and runtime randomness without reading character identity.
+        local now = math.floor(tonumber(time()) or 0)
+        local randA = math.random(0, 0xFFFFFF)
+        local randB = math.random(0, 0xFFFFFF)
+        local randC = math.random(0, 0xFFFFFF)
+        token = string.format("%06x%06x%06x%06x", now % 0x1000000,
+            randA, randB, randC)
+        RivalMindCharacterDB.localToken = token
+    end
+    characterToken = token
+    return token
+end
 
 local function integer(v, allowNegative)
     local ok, result = pcall(function()
@@ -52,7 +75,8 @@ local function record(kind, a, b, c)
     RivalMindDB.nextTelemetryID = nextID
     records[#records + 1] = {
         id = nextID, stamp = integer(time()) or 0,
-        kind = kind, a = a, b = b, c = c
+        kind = kind, a = a, b = b, c = c,
+        characterToken = getCharacterToken()
     }
     while #records > MAX_EVENTS do table.remove(records, 1) end
 end
@@ -185,7 +209,7 @@ end
 
 local function exportTelemetry()
     if not records and not store() then return end
-    local rows = { "RT1" }
+    local rows = { "RT2" }
     for _, entry in ipairs(records) do
         local kind = entry.kind
         local a, b, c = entry.a, entry.b, entry.c
@@ -202,6 +226,7 @@ local function exportTelemetry()
             a,
             b,
             tostring(c or ""),
+            tostring(entry.characterToken or ""),
         }, ",")
     end
     RivalMindDB.telemetryExport = table.concat(rows, ";")
@@ -218,12 +243,14 @@ for _, event in ipairs({
     "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT", "PLAYER_LEVEL_UP",
     "PLAYER_EQUIPMENT_CHANGED", "PLAYER_MONEY", "BAG_UPDATE_DELAYED",
     "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS",
+    "MERCHANT_SHOW", "MERCHANT_CLOSED",
 }) do
     pcall(events.RegisterEvent, events, event)
 end
 
 events:SetScript("OnEvent", function(_, event, ...)
     if event == "PLAYER_ENTERING_WORLD" then
+        getCharacterToken()
         store()
         characterSnapshot()
         equipmentSnapshot()
@@ -236,6 +263,16 @@ events:SetScript("OnEvent", function(_, event, ...)
         equipmentSnapshot(...)
     elseif event == "PLAYER_MONEY" then
         moneySnapshot()
+    elseif event == "MERCHANT_SHOW" then
+        if not merchantOpen then
+            merchantOpen = true
+            record("V", 1, "", "") -- vendor UI opened; NOT proof of a sale
+        end
+    elseif event == "MERCHANT_CLOSED" then
+        if merchantOpen then
+            merchantOpen = false
+            record("V", 0, "", "")
+        end
     elseif event == "BAG_UPDATE_DELAYED" then
         requestBagSnapshot()
     elseif event == "ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA"
