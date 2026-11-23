@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.spec
+*.sqlite3
+*.db
+*.log
+*.exe
+*.msi
+*.zip
+*.sha256
+.env
+# Do not accidentally commit character, account, or API information:
+WTF/
+SavedVariables/
+RivalMind.lua
+*.secrets
