@@ -1,4 +1,4 @@
-# RivalMind 0.2.0-alpha — quest telemetry preview
+# RivalMind: v0.2 WoW addon + v0.3 local companion analytics
 
 **Status:** early prototype. Not yet field-tested on a live WoW: Forever client.
 
@@ -14,6 +14,15 @@ SavedVariables export, and local SQLite import before enabling advanced features
 - **Quest Intelligence preview:** accepted, turned-in, quest-log completion and removed (reason unknown) events, including available quest title, ID, zone and reported reward XP. Last **200** quest events are kept locally.
 - `/rm quests` shows a brief on-demand quest event summary; the existing session panel remains unchanged and hidden by default.
 - Companion imports quest events into a separate SQLite table; v0.1 session exports are still supported.
+- **v0.3 local companion analytics:** pairs quest acceptance and turn-in events by
+  source and quest ID; displays elapsed wall-clock time and reported quest XP
+  for recently turned-in quests.
+- Missing acceptance records produce **unknown elapsed duration**. This is
+  expected for quests accepted before the addon was installed or before the
+  bounded record window. It does not fabricate completion times.
+- Elapsed time includes AFK, travel, and time spent on other quests. It is
+  *not* measured active questing time or a reliable route efficiency score yet.
+- No changes to the v0.2 in-game UI or quest collection module in this step.
 - Local companion: manually import the addon export into SQLite and view recent sessions.
 - Companion has **no outbound network capabilities**, no AI authentication, no guild traffic.
 - SQLite data stays in the local user profile. Reimports update records instead of duplicating.
@@ -29,7 +38,7 @@ must not be interpreted as abandonment; a turn-in may also trigger a removal.
    `World of Warcraft/_forever_/Interface/AddOns/`. Do not install into `_retail_`.
 2. Launch WoW: Forever and enable RivalMind on the AddOns screen.
 3. Run `/rm` to show the small panel. Run `/rm hide` or close it to hide it.
-4. Play normally. This alpha collects player XP, deaths, zone, session time and basic quest events.
+4. Play normally. The v0.2 addon collects player XP, deaths, zone, session time and basic quest events.
 5. Type `/rm quests` after accepting and turning in a quest. Use `/reload` or log out to make WoW write `RivalMindDB.export` and `RivalMindDB.questExport` to disk.
 
 Note: in-game memory does not automatically stream to the companion. WoW writes
@@ -87,11 +96,27 @@ python -m unittest discover -s tests -v
 
 ## Known limitations
 
-- The v0.1 session collector was smoke-tested in-game for addon loading, XP gain and
-  zone changes. The new v0.2 quest event handlers are **not yet verified in-game**.
+- The v0.1 session collector was smoke-tested in-game for loading, XP, deaths and
+  zone changes. The v0.2 quest acceptance and turn-in handlers have now
+  been observed working in a live Forever client. The companion's new
+  v0.3 elapsed-time analytics still require on-machine import verification.
 - It does **not** register the restricted `COMBAT_LOG_EVENT_UNFILTERED` event.
 - XP calculations across unusual leveling transitions may be approximate.
 - It retains only 100 WoW session records and 200 quest events, so import periodically. Imported data remains
   in SQLite even after the addon ages older records out.
 - Existing RivalTally/LootSnipe data is **not imported or modified** in this alpha.
 - The source is published publicly as an experimental alpha. No signed companion installer or public release has been published.
+## Validate quest efficiency locally (v0.3 companion)
+
+1. Continue using the **v0.2 WoW addon**. Accept and turn in a new quest while it
+   is loaded. In-game `/rm quests` verifies event collection.
+2. Run `/reload` or log out to write `RivalMind.lua` SavedVariables to disk.
+3. From the repository, run `python companion/rivalmind.py` (Python 3.12+).
+   Choose your `RivalMind.lua` file and click **Import saved sessions**.
+4. The local companion lists recent quest turn-ins with elapsed time and reward
+   XP when acceptance and turn-in are both present. Missing starts show
+   **unknown**. Reimporting should not create duplicates.
+
+Run `python -m unittest discover -s tests -v` to validate the importer and
+quest pairing. An unsigned Windows test executable may be available as a
+GitHub Actions artifact after CI succeeds; it is **not a signed public installer**.
