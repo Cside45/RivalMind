@@ -2,7 +2,7 @@
 ## Title: RivalMind
 ## Notes: Local-first session telemetry for World of Warcraft: Forever. No network traffic.
 ## Author: RivalMind Contributors
-## Version: 0.4.0-alpha
+## Version: 0.4.1-alpha
 ## SavedVariables: RivalMindDB
 ## SavedVariablesPerCharacter: RivalMindCharacterDB
 Core.lua
