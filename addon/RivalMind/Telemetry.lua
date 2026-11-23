@@ -9,6 +9,9 @@ local lastGold
 local lastZoneKey
 local bagCounts
 local bagPending = false
+local bagContext = "unattributed"
+local merchantOpen = false
+local lootOpen = false
 
 local function integer(v, allowNegative)
     local ok, result = pcall(function()
@@ -52,7 +55,8 @@ local function record(kind, a, b, c)
     RivalMindDB.nextTelemetryID = nextID
     records[#records + 1] = {
         id = nextID, stamp = integer(time()) or 0,
-        kind = kind, a = a, b = b, c = c
+        kind = kind, a = a, b = b, c = c,
+        characterID = RM.GetCharacterID and RM.GetCharacterID() or 0
     }
     while #records > MAX_EVENTS do table.remove(records, 1) end
 end
@@ -103,9 +107,10 @@ local function moneySnapshot()
     local amount = integer(value)
     if not amount then return end
     if lastGold == nil then
-        record("G", amount, "", "") -- initial balance, NOT gold earned
+        record("G", amount, "", "baseline") -- initial balance, NOT gold earned
     elseif lastGold ~= amount then
-        record("G", amount, amount - lastGold, "")
+        record("G", amount, amount - lastGold,
+            merchantOpen and "merchant_window" or "unattributed")
     end
     lastGold = amount
 end
@@ -157,6 +162,8 @@ local function bagSnapshot()
     bagPending = false
     local now = readBags()
     if not now then return end
+    local context = bagContext
+    bagContext = "unattributed"
     if bagCounts then
         local changes = {}
         for id, count in pairs(now) do
@@ -167,13 +174,15 @@ local function bagSnapshot()
             if not now[id] then changes[id] = -count end
         end
         for id, delta in pairs(changes) do
-            record("B", id, delta, "")
+            record("B", id, delta, context)
         end
     end
     bagCounts = now
 end
 
 local function requestBagSnapshot()
+    if merchantOpen then bagContext = "merchant_window"
+    elseif lootOpen and bagContext ~= "merchant_window" then bagContext = "loot_window" end
     if bagPending then return end
     bagPending = true
     if C_Timer and type(C_Timer.After) == "function" then
@@ -185,7 +194,7 @@ end
 
 local function exportTelemetry()
     if not records and not store() then return end
-    local rows = { "RT1" }
+    local rows = { "RT2" }
     for _, entry in ipairs(records) do
         local kind = entry.kind
         local a, b, c = entry.a, entry.b, entry.c
@@ -202,6 +211,7 @@ local function exportTelemetry()
             a,
             b,
             tostring(c or ""),
+            tostring(integer(entry.characterID) or 0),
         }, ",")
     end
     RivalMindDB.telemetryExport = table.concat(rows, ";")
@@ -218,6 +228,7 @@ for _, event in ipairs({
     "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT", "PLAYER_LEVEL_UP",
     "PLAYER_EQUIPMENT_CHANGED", "PLAYER_MONEY", "BAG_UPDATE_DELAYED",
     "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS",
+    "MERCHANT_SHOW", "MERCHANT_CLOSED", "LOOT_OPENED", "LOOT_CLOSED",
 }) do
     pcall(events.RegisterEvent, events, event)
 end
@@ -230,6 +241,14 @@ events:SetScript("OnEvent", function(_, event, ...)
         moneySnapshot()
         zoneSnapshot()
         requestBagSnapshot()
+    elseif event == "MERCHANT_SHOW" then
+        merchantOpen = true
+    elseif event == "MERCHANT_CLOSED" then
+        merchantOpen = false
+    elseif event == "LOOT_OPENED" then
+        lootOpen = true
+    elseif event == "LOOT_CLOSED" then
+        lootOpen = false
     elseif event == "PLAYER_LEVEL_UP" then
         characterSnapshot()
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
