@@ -63,7 +63,7 @@ def parse_telemetry_export(source: str) -> list[dict]:
             a, b = _decode(a), _decode(b)
             if not a or len(a) > 80 or len(b) > 80:
                 raise ValueError('Invalid location snapshot')
-        elif kind == 'E':
+        elif kind in ('E', 'S'):
             if not 1 <= _int(a) <= 19 or _int(b) > 100_000_000:
                 raise ValueError('Invalid equipment snapshot')
             a, b = str(_int(a)), str(_int(b))
@@ -110,7 +110,8 @@ def summarize_telemetry(database_path: Path) -> dict:
                 FROM telemetry_events ORDER BY source_key,stamp,event_id''').fetchall()
         except sqlite3.OperationalError:
             return {}
-    gold_net, bag_changes, zone_changes, gear_changes = 0, 0, 0, 0
+    gold_net, bag_changes, zone_changes = 0, 0, 0
+    gear_legacy, gear_baselines, gear_changes = 0, 0, 0
     latest_char = None
     latest_balance = None
     zones = set()
@@ -127,9 +128,16 @@ def summarize_telemetry(database_path: Path) -> dict:
         elif kind == 'B':
             bag_changes += 1
         elif kind == 'E':
-            gear_changes += 1
+            # Older v0.4 records mix actual slot changes and first-login
+            # snapshots. It is not possible to reconstruct that distinction.
+            gear_legacy += 1
+        elif kind == 'S':
+            gear_baselines += 1
     return {'events': len(rows), 'character': latest_char,
             'gold_net_copper': gold_net, 'last_observed_gold_copper': latest_balance,
             'zone_observations': zone_changes, 'distinct_zones': len(zones),
-            'equipment_observations': gear_changes,
+            'equipment_observations': gear_legacy + gear_baselines + gear_changes,
+            'equipment_legacy_unclassified': gear_legacy,
+            'equipment_baseline_snapshots': gear_baselines,
+            'equipment_confirmed_changes': gear_changes,
             'bag_quantity_changes': bag_changes}
