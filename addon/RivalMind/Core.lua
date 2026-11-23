@@ -1,4 +1,4 @@
--- RivalMind 0.1.0-alpha | World of Warcraft: Forever (Interface 16001)
+-- RivalMind 0.2.0-alpha | World of Warcraft: Forever (Interface 16001)
 -- Privacy: no network calls, no addon messages, no chat collection.
 -- This build intentionally does NOT attempt to read restricted combat logs.
 local _, RM = ...
@@ -187,12 +187,14 @@ SlashCmdList.RIVALMIND = function(input)
     input = (input or ""):lower():match("^%s*(.-)%s*$")
     if input == "status" then
         RM.PrintStatus()
+    elseif input == "quests" then
+        if RM.PrintQuestStatus then RM.PrintQuestStatus() end
     elseif input == "show" then
         if RM.SetPanelVisible then RM.SetPanelVisible(true) end
     elseif input == "hide" then
         if RM.SetPanelVisible then RM.SetPanelVisible(false) end
     elseif input == "help" then
-        print("|cff80c5ffRivalMind|r: /rm [show | hide | status | help]")
+        print("|cff80c5ffRivalMind|r: /rm [show | hide | status | quests | help]")
     else
         if RM.TogglePanel then RM.TogglePanel() end
     end
