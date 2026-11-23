@@ -5,7 +5,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT.parent
-VERSION = "0.2.0-alpha"
+SOURCE_VERSION = "0.3.0-alpha"\nADDON_VERSION = "0.2.0-alpha"
 
 
 def write_zip(destination, files):
@@ -21,11 +21,11 @@ source_files = [(f, f.relative_to(ROOT).as_posix())
                 for f in sorted(ROOT.rglob("*"))
                 if f.is_file() and ".git" not in f.parts and "__pycache__" not in f.parts]
 
-addon_zip = OUTPUT / f"RivalMind-addon-{VERSION}.zip"
-source_zip = OUTPUT / f"RivalMind-starter-source-{VERSION}.zip"
+addon_zip = OUTPUT / f"RivalMind-addon-{ADDON_VERSION}.zip"
+source_zip = OUTPUT / f"RivalMind-starter-source-{SOURCE_VERSION}.zip"
 addon_hash = write_zip(addon_zip, addon_files)
 source_hash = write_zip(source_zip, source_files)
-checksums = OUTPUT / f"RivalMind-SHA256SUMS-{VERSION}.txt"
+checksums = OUTPUT / f"RivalMind-SHA256SUMS-{SOURCE_VERSION}.txt"
 checksums.write_text(f"{addon_hash}  {addon_zip.name}\n{source_hash}  {source_zip.name}\n")
 print(addon_zip)
 print(source_zip)
