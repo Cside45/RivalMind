@@ -87,8 +87,11 @@ local function equipmentSnapshot(slot)
             local id = integer(value)
             if value == nil then id = 0 end
             if id and equipment[i] ~= id then
+                -- S = first observed equipment state after load; E = later
+                -- genuine slot change. Never count a reload baseline as a swap.
+                local kind = equipment[i] == nil and "S" or "E"
                 equipment[i] = id
-                record("E", i, id, "")
+                record(kind, i, id, "")
             end
         end
     end
