@@ -30,11 +30,11 @@ class TelemetryTests(unittest.TestCase):
         raw = (
             'telemetryExport = "RT1;'
             '1,1763800000,S,11,4444,;'
-            '2,1763800010,E,11,5555,;'
+            '2,1763800010,D,11,5555,;'
             '3,1763800015,E,12,7777,"'
         )
         events = telemetry.parse_telemetry_export(raw)
-        self.assertEqual([e['kind'] for e in events], ['S', 'E', 'E'])
+        self.assertEqual([e['kind'] for e in events], ['S', 'D', 'E'])
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / 'history.sqlite3'
             with sqlite3.connect(db) as conn:
@@ -43,8 +43,8 @@ class TelemetryTests(unittest.TestCase):
             self.assertEqual(summary['equipment_baseline_snapshots'], 1)
             # "E" from legacy saves cannot be distinguished from actual
             # changes, so do not claim any verified changes from old rows.
-            self.assertEqual(summary['equipment_legacy_unclassified'], 2)
-            self.assertEqual(summary['equipment_confirmed_changes'], 0)
+            self.assertEqual(summary['equipment_legacy_unclassified'], 1)
+            self.assertEqual(summary['equipment_confirmed_changes'], 1)
 
     def test_backward_compatible(self):
         self.assertEqual(telemetry.parse_telemetry_export('RivalMindDB = { ["export"] = "RM1" }'), [])
