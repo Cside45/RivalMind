@@ -326,8 +326,13 @@ def gui() -> None:
         )
         if file:
             chosen.set(file)
+            import_button.state(["!disabled"])
 
     ttk.Button(row, text="Browse…", command=choose).pack(side="right")
+    # Keep the primary action above the expanding history pane. It must remain
+    # visible on smaller Windows displays and at higher DPI scaling.
+    import_button = ttk.Button(app, text="Import saved sessions", state="disabled")
+    import_button.pack(anchor="e", pady=(0, 8))
     status = tk.StringVar(value="Nothing is uploaded. Imports only touch files on your PC.")
     ttk.Label(app, textvariable=status, wraplength=540).pack(anchor="w", pady=(0, 10))
     ttk.Label(app, text="Recent sessions", font=("Segoe UI", 11, "bold")).pack(anchor="w")
@@ -369,7 +374,7 @@ def gui() -> None:
         status.set(f"Imported/updated {imported} sessions ({total} total). {count_quests()} quest events stored locally.")
         refresh()
 
-    ttk.Button(app, text="Import saved sessions", command=import_file).pack(anchor="e", pady=(10, 2))
+    import_button.configure(command=import_file)
     refresh()
     app.mainloop()
 
