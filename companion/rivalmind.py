@@ -10,13 +10,18 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
+
+# Allow the companion to load its reviewed, bundled local parser when imported
+# by the existing tests via importlib.util.spec_from_file_location.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from telemetry import parse_telemetry_export, store_telemetry, summarize_telemetry
 import re
 import sqlite3
 import sys
 import time
 from urllib.parse import unquote
 
-VERSION = "0.3.0-alpha"
+VERSION = "0.4.0-alpha"
 MAX_INPUT_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 100
 MAX_QUEST_ROWS = 200
@@ -170,6 +175,7 @@ def import_sessions(file_path: Path, database_path: Path | None = None) -> tuple
     file_path = Path(file_path).expanduser().resolve(strict=True)
     sessions = read_sessions(file_path)
     quest_events = read_quest_events(file_path)
+    telemetry_events = parse_telemetry_export(file_path.read_text(encoding="utf-8-sig"))
     db_path = Path(database_path or default_database()).expanduser()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     # Hash the on-disk source path rather than storing an account/character path.
@@ -232,6 +238,7 @@ def import_sessions(file_path: Path, database_path: Path | None = None) -> tuple
                 source_key, quest["event_id"], quest["quest_id"], quest["stamp"],
                 quest["kind"], quest["reported_xp"], quest["zone"], quest["title"], timestamp
             ))
+        store_telemetry(connection, source_key, timestamp, telemetry_events)
         total = connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
     return len(sessions), total
 
@@ -305,7 +312,7 @@ def gui() -> None:
     from datetime import datetime
 
     app = tk.Tk()
-    app.title("RivalMind | Local Companion v0.3")
+    app.title("RivalMind | Local Companion v0.4")
     app.geometry("590x400")
     app.minsize(530, 340)
     app.configure(padx=18, pady=16)
@@ -342,6 +349,23 @@ def gui() -> None:
     def refresh() -> None:
         rows = read_recent()
         lines = []
+        telemetry = summarize_telemetry(default_database())
+        if telemetry.get("events"):
+            character = telemetry.get("character")
+            if character:
+                lines.append(f"Character: {character[0]}  Level {character[1]}")
+            balance = telemetry.get("last_observed_gold_copper")
+            if balance is not None:
+                lines.append(f"Last observed gold: {balance / 10000:.2f}g")
+            lines.append(
+                f"Gold net movement (NOT profit): {telemetry['gold_net_copper'] / 10000:+.2f}g"
+            )
+            lines.append(
+                f"Observed: {telemetry['distinct_zones']} zones, "
+                f"{telemetry['equipment_observations']} equipment changes/snapshots, "
+                f"{telemetry['bag_quantity_changes']} bag-item changes"
+            )
+            lines.append("")
         for started, duration, xp, deaths, zone in rows:
             when = datetime.fromtimestamp(started).strftime("%b %d %H:%M")
             lines.append(f"{when:<15}  {duration // 60:>3} min   {xp:>7} XP   {deaths} deaths   {zone[:28]}")
@@ -371,7 +395,11 @@ def gui() -> None:
         except (OSError, ValueError, sqlite3.DatabaseError) as exc:
             messagebox.showerror("Import failed", str(exc))
             return
-        status.set(f"Imported/updated {imported} sessions ({total} total). {count_quests()} quest events stored locally.")
+        count = summarize_telemetry(default_database()).get("events", 0)
+        status.set(
+            f"Imported {imported} sessions ({total} total); "
+            f"{count_quests()} quest events and {count} telemetry observations."
+        )
         refresh()
 
     import_button.configure(command=import_file)
