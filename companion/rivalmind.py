@@ -21,7 +21,7 @@ import sqlite3
 import time
 from urllib.parse import unquote
 
-VERSION = "0.4.0-alpha"
+VERSION = "0.4.1-alpha"
 MAX_INPUT_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 100
 MAX_QUEST_ROWS = 200
@@ -312,7 +312,7 @@ def gui() -> None:
     from datetime import datetime
 
     app = tk.Tk()
-    app.title("RivalMind | Local Companion v0.4")
+    app.title("RivalMind | Local Companion v0.4.1")
     app.geometry("590x400")
     app.minsize(530, 340)
     app.configure(padx=18, pady=16)
@@ -361,10 +361,15 @@ def gui() -> None:
                 f"Gold net movement (NOT profit): {telemetry['gold_net_copper'] / 10000:+.2f}g"
             )
             lines.append(
-                f"Observed: {telemetry['distinct_zones']} zones, "
+                f"Character-separated profiles: {telemetry['character_profiles']}; "
+                f"older unassigned observations: {telemetry['unassigned_legacy_events']}"
+            )
+            lines.append(
+                f"Observed for selected profile: {telemetry['distinct_zones']} zones, "
                 f"{telemetry['equipment_baseline_snapshots']} initial gear snapshots, "
                 f"{telemetry['bag_quantity_changes']} bag-item changes"
             )
+            lines.append(f"Vendor windows observed: {telemetry['vendor_windows_observed']} (not proven sales)")
             lines.append(
                 f"Gear changes: {telemetry['equipment_confirmed_changes']} verified, "
                 f"{telemetry['equipment_legacy_unclassified']} older unclassified observations"
