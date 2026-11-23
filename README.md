@@ -1,5 +1,65 @@
 # RivalMind: v0.2 WoW addon + v0.3 local companion analytics
 
+## v0.4 telemetry foundation (experimental branch)
+
+The v0.4 addon keeps the **existing minimal /rm panel**. It adds no overlays,
+minimap buttons, networking, automatic gameplay or combat-log workarounds.
+
+Observations saved in a bounded in-memory stream and exported to the local
+\`RivalMind.lua\` SavedVariables file on logout or \`/reload\`:
+
+| Source | Recorded fields | Important limitation |
+| --- | --- | --- |
+| Character | Class token and level changes | No character name, account name or GUID |
+| Equipment | Inventory slot and equipped item ID | Does not inspect enchants, stats or upgrade value |
+| Money | Copper balance; signed delta | **Net movement, not profit**; login balance is baseline |
+| Bag inventory | Item ID and net quantity change | Does not prove looting, selling or item origin |
+| Geography | Zone and subzone transition | No location coordinates or exact routes |
+
+\`/rm telemetry\` reports a minimal one-line diagnostic count. The regular
+window still defaults to hidden. There is no data sharing with RivalMind
+maintainers, guildmates or AI providers in this build.
+
+The v0.4 companion imports the strict \`telemetryExport\` (RT1) string into
+a dedicated SQLite table, deduplicated by local source and event ID. It
+shows observed character, last balance, net gold movement, number of zones,
+equipment observations, and bag-item changes. Prior exports remain compatible.
+
+**Important testing caveats:**
+- v0.4 has not been validated in a real Forever client yet. Some character,
+  equipment or bag fields may be unavailable or secret and are intentionally
+  skipped rather than guessed.
+- The current DB is account-scoped and does **not** separately identify each
+  character. Limit v0.4 testing to one character until stable per-character
+  anonymous profiles are implemented.
+- \`telemetryEvents\` retains at most 600 records in WoW; SQLite retains older
+  imported events. Import periodically and avoid inferring that a missing
+  event never happened.
+- Gold totals are observed **net copper changes** only. No vendor attribution
+  or loot value calculation is implemented.
+- Gear records include an initial snapshot, not necessarily an actual
+  equipment change.
+- Bag counts reflect net changes across player bags, not exact loot pickup
+  attribution. A baseline scan does not generate fake loot.
+- This is a **development branch**, not a public signed Windows release.
+
+### v0.4 test procedure
+1. Make a backup of your current v0.2 \`RivalMind\` addon folder.
+2. Copy the development branch's \`addon/RivalMind\` contents into the WoW
+   \`_forever_/Interface/AddOns/RivalMind\` folder, or use the packaged alpha
+   ZIP if one has been produced.
+3. Confirm \`/rm status\` and \`/rm quests\` still work.
+4. Type \`/rm telemetry\`. Change zones, swap an item, gain or spend a small
+   amount of gold, and change bag item quantities through ordinary play.
+5. Type \`/reload\`, then import \`RivalMind.lua\` using the new companion.
+   Verify that raw observations match your actual actions and reimporting
+   doesn't duplicate records.
+6. Run \`python -m unittest discover -s tests -v\` to test the strict
+   parser and local database schema.
+
+For developer review, no model or AI account is needed to run any v0.4 test.
+
+
 **Status:** early prototype. Not yet field-tested on a live WoW: Forever client.
 
 RivalMind will eventually provide opt-in PvP, farming, and guild intelligence. This
