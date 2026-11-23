@@ -4,6 +4,7 @@
 ## Author: RivalMind Contributors
 ## Version: 0.4.0-alpha
 ## SavedVariables: RivalMindDB
+## SavedVariablesPerCharacter: RivalMindCharacterDB
 Core.lua
 Quest.lua
 Telemetry.lua
