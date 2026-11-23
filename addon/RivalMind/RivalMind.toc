@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: RivalMind
+## Notes: Local-first session telemetry for World of Warcraft: Forever. No network traffic.
+## Author: RivalMind Contributors
+## Version: 0.1.0-alpha
+## SavedVariables: RivalMindDB
+Core.lua
+UI.lua
